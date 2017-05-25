@@ -4,133 +4,111 @@ using System.Linq;
 using System.Text;
 using UnityEngine;
 
-
-/** FSavedMove_Character represents a saved move on the client that has been sent to the server and might need to be played back. */
-public class FSavedMove_Character
+namespace UE.Networking
 {
-
-    public FSavedMove_Character() { }
-    // ~FSavedMove_Character();
-    [Flags]
-    public enum SavedMoveFlags
+    /** FSavedMove_Character represents a saved move on the client that has been sent to the server and might need to be played back. */
+    public class FSavedMove_Character
     {
-       bPressedJump = 0,
-       bWantsToCrouch = 1,
-       bForceMaxAccel =2,
+
+        public FSavedMove_Character() { }
+        // ~FSavedMove_Character();
+
+        //   uint32 bPressedJump:1;
+        //uint32 bWantsToCrouch:1;
+        //uint32 bForceMaxAccel:1;
+
         /** If true, can't combine this move with another move. */
-       bForceNoCombine = 4,
+        //uint32 bForceNoCombine:1;
+
         /** If true this move is using an old TimeStamp, before a reset occurred. */
-       bOldTimeStampBeforeReset = 8,
+        //uint32 bOldTimeStampBeforeReset:1;
 
-    }
- //   uint32 bPressedJump:1;
-	//uint32 bWantsToCrouch:1;
-	//uint32 bForceMaxAccel:1;
+        float TimeStamp;    // Time of this move.
+        float DeltaTime;    // amount of time for this move
+        float CustomTimeDilation;
+        float JumpKeyHoldTime;
+        Int32 JumpMaxCount;
+        Int32 JumpCurrentCount;
+        EMovementMode MovementMode; // packed movement mode
 
-	/** If true, can't combine this move with another move. */
-	//uint32 bForceNoCombine:1;
+        // Information at the start of the move
+        Vector3 StartLocation;
+        Vector3 StartRelativeLocation;
+        Vector3 StartVelocity;
+        FFindFloorResult StartFloor;
 
-	/** If true this move is using an old TimeStamp, before a reset occurred. */
-	//uint32 bOldTimeStampBeforeReset:1;
+        Quaternion StartRotation; //FRotator StartRotation
+        Quaternion StartControlRotation;    //FRotator StartControlRotation;
+        Quaternion StartBaseRotation;    // rotation of the base component (or bone), only saved if it can move.
+        float StartCapsuleRadius;
+        float StartCapsuleHalfHeight;
+        Collider StartBase; //TWeakObjectPtr<UPrimitiveComponent> StartBase;
+        string StartBoneName;
 
-	float TimeStamp;    // Time of this move.
-float DeltaTime;    // amount of time for this move
-float CustomTimeDilation;
-float JumpKeyHoldTime;
-Int32 JumpMaxCount;
-Int32 JumpCurrentCount;
-uint8 MovementMode; // packed movement mode
+        // Information after the move has been performed
+        Vector3 SavedLocation;
+        Quaternion SavedRotation;  //FRotator SavedRotation;
+        Vector3 SavedVelocity;
+        Vector3 SavedRelativeLocation;
+        Quaternion SavedControlRotation; // FRotator SavedControlRotation;
+        Collider EndBase;         //TWeakObjectPtr<UPrimitiveComponent> EndBase;
+        string EndBoneName;
 
-// Information at the start of the move
-Vector3 StartLocation;
-Vector3 StartRelativeLocation;
-Vector3 StartVelocity;
-FFindFloorResult StartFloor;
+        Vector3 Acceleration;
 
-Quaternion StartRotation; //FRotator StartRotation
-Quaternion StartControlRotation;    //FRotator StartControlRotation;
-Quaternion StartBaseRotation;    // rotation of the base component (or bone), only saved if it can move.
-float StartCapsuleRadius;
-float StartCapsuleHalfHeight;
-    Collider StartBase; //TWeakObjectPtr<UPrimitiveComponent> StartBase;
-    string StartBoneName;
+        // Cached to speed up iteration over IsImportantMove().
+        Vector3 AccelNormal;
+        float AccelMag;
 
-    // Information after the move has been performed
-    Vector3 SavedLocation;
-    Quaternion SavedRotation;  //FRotator SavedRotation;
-    Vector3 SavedVelocity;
-    Vector3 SavedRelativeLocation;
-    Quaternion SavedControlRotation; // FRotator SavedControlRotation;
-    Collider EndBase;         //TWeakObjectPtr<UPrimitiveComponent> EndBase;
-    string EndBoneName;
+        //TWeakObjectPtr<class UAnimMontage> RootMotionMontage;
+        Animator RootMotionMontage;
+        float RootMotionTrackPosition;
 
-    Vector3 Acceleration;
+        // TODO:
+        //FRootMotionMovementParams RootMotionMovement;
+        // TODO:
+        //FRootMotionSourceGroup SavedRootMotion;
 
-    // Cached to speed up iteration over IsImportantMove().
-    Vector3 AccelNormal;
-float AccelMag;
+        /** Threshold for deciding this is an "important" move based on DP with last acked acceleration. */
+        float AccelDotThreshold;
+        /** Threshold for deciding is this is an important move because acceleration magnitude has changed too much */
+        float AccelMagThreshold;
+        /** Threshold for deciding if we can combine two moves, true if cosine of angle between them is <= this. */
+        float AccelDotThresholdCombine;
 
-//TWeakObjectPtr<class UAnimMontage> RootMotionMontage;
-Animator RootMotionMontage;
-    float RootMotionTrackPosition;
+        /** Clear saved move properties, so it can be re-used. */
+        public void Clear() { }
 
-    // TODO:
-    //FRootMotionMovementParams RootMotionMovement;
-    // TODO:
-    //FRootMotionSourceGroup SavedRootMotion;
+        /** Called to set up this saved move (when initially created) to make a predictive correction. */
+        public virtual void SetMoveFor(GameObject Character, float InDeltaTime, Vector3 NewAccel, FNetworkPredictionData_Client_Character ClientData)
+        { }
+        /** Set the properties describing the position, etc. of the moved pawn at the start of the move. */
+        public virtual void SetInitialPosition(GameObject Character) { }
 
-    /** Threshold for deciding this is an "important" move based on DP with last acked acceleration. */
-    float AccelDotThreshold;
-/** Threshold for deciding is this is an important move because acceleration magnitude has changed too much */
-float AccelMagThreshold;
-/** Threshold for deciding if we can combine two moves, true if cosine of angle between them is <= this. */
-float AccelDotThresholdCombine;
+        /** @Return true if this move is an "important" move that should be sent again if not acked by the server */
+        public virtual bool IsImportantMove(ref FSavedMove_Character LastAckedMove) { }
 
-/** Clear saved move properties, so it can be re-used. */
-public void Clear() { }
+        /** Returns starting position if we were to revert the move, either absolute StartLocation,
+         *  or StartRelativeLocation offset from MovementBase's current location (since we want to try to move forward at this time). */
+        public virtual Vector3 GetRevertedLocation() { }
 
-/** Called to set up this saved move (when initially created) to make a predictive correction. */
-virtual void SetMoveFor(ACharacter* C, float InDeltaTime, Vector3  NewAccel, FNetworkPredictionData_Client_Character ClientData)
-{}
-    /** Set the properties describing the position, etc. of the moved pawn at the start of the move. */
-    virtual void SetInitialPosition(ACharacter* C) { }
+        enum EPostUpdateMode
+        {
+            PostUpdate_Record,      // Record a move after having run the simulation
+            PostUpdate_Replay,      // Update after replaying a move for a client correction
+        }
 
-/** @Return true if this move is an "important" move that should be sent again if not acked by the server */
-virtual bool IsImportantMove(const FSavedMovePtr& LastAckedMove) const;
+        /** Set the properties describing the final position, etc. of the moved pawn. */
+        public virtual void PostUpdate(ACharacter* C, EPostUpdateMode PostUpdateMode) { }
 
-/** Returns starting position if we were to revert the move, either absolute StartLocation, or StartRelativeLocation offset from MovementBase's current location (since we want to try to move forward at this time). */
-virtual FVector GetRevertedLocation() const;
+        /** @Return true if this move can be combined with NewMove for replication without changing any behavior */
+        public virtual bool CanCombineWith(FSavedMove NewMove, ACharacter* InPawn, float MaxDelta) { }
 
-enum EPostUpdateMode
-{
-    PostUpdate_Record,      // Record a move after having run the simulation
-    PostUpdate_Replay,      // Update after replaying a move for a client correction
-};
+    /** Called before ClientUpdatePosition uses this SavedMove to make a predictive correction	 */
+    public virtual void PrepMoveFor(ACharacter* C) { }
 
-/** Set the properties describing the final position, etc. of the moved pawn. */
-virtual void PostUpdate(ACharacter* C, EPostUpdateMode PostUpdateMode);
+    /** @returns a byte containing encoded special movement information (jumping, crouching, etc.)	 */
+    public virtual CompressedFlags GetCompressedFlags() { }
 
-/** @Return true if this move can be combined with NewMove for replication without changing any behavior */
-virtual bool CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InPawn, float MaxDelta) const;
-
-/** Called before ClientUpdatePosition uses this SavedMove to make a predictive correction	 */
-virtual void PrepMoveFor(ACharacter* C);
-
-/** @returns a byte containing encoded special movement information (jumping, crouching, etc.)	 */
-virtual uint8 GetCompressedFlags() const;
-
-// Bit masks used by GetCompressedFlags() to encode movement information.
-[Flags]
-enum CompressedFlags
-{
-    FLAG_JumpPressed = 0x01,    // Jump pressed
-    FLAG_WantsToCrouch = 0x02,  // Wants to crouch
-    FLAG_Reserved_1 = 0x04, // Reserved for future use
-    FLAG_Reserved_2 = 0x08, // Reserved for future use
-                            // Remaining bit masks are available for custom flags.
-    FLAG_Custom_0 = 0x10,
-    FLAG_Custom_1 = 0x20,
-    FLAG_Custom_2 = 0x40,
-    FLAG_Custom_3 = 0x80,
-};
-};
+}
+}   
